@@ -1,0 +1,2123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sector Performance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #0b0e14;
+  --surface: #10141e;
+  --border:  #1c2333;
+  --text:    #dde4f0;
+  --muted:   #4a5a7a;
+  --green:   #00e676;
+  --red:     #ff5252;
+  --amber:   #ffab40;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'IBM Plex Mono',monospace; background:var(--bg); color:var(--text); min-height:100vh; }
+
+.header {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:16px 28px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+}
+.h-title { font-family:'Barlow Condensed',sans-serif; font-size:24px; font-weight:800; color:#fff; letter-spacing:-0.3px; }
+.h-sub   { font-size:10px; color:var(--muted); margin-top:2px; letter-spacing:0.5px; }
+.h-right { font-size:11px; color:var(--muted); text-align:right; line-height:1.8; }
+.h-right .up   { color:var(--green); font-weight:700; }
+.h-right .down { color:var(--red);   font-weight:700; }
+
+.sumbar {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:1px; background:var(--border); border-bottom:1px solid var(--border);
+}
+.sum-cell { background:var(--surface); padding:12px 18px; text-align:center; }
+.sum-lbl  { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+.sum-val  { font-family:'Barlow Condensed',sans-serif; font-size:17px; font-weight:800; }
+.sum-sub  { font-size:10px; color:var(--muted); margin-top:2px; }
+
+.controls {
+  padding:12px 28px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  background:var(--bg); border-bottom:1px solid var(--border);
+}
+.controls label { font-size:10px; color:var(--muted); letter-spacing:0.5px; }
+.controls select, .controls input {
+  background:var(--surface); border:1px solid var(--border); color:var(--text);
+  font-family:'IBM Plex Mono',monospace; font-size:10px; padding:5px 9px;
+  border-radius:3px; outline:none; cursor:pointer;
+}
+.controls select:focus, .controls input:focus { border-color:#448aff; }
+
+.grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr));
+  gap:12px; padding:20px 28px;
+}
+
+.card {
+  border:1px solid; border-radius:6px; overflow:hidden;
+  transition:transform .15s, box-shadow .15s;
+  animation:fadeUp .25s ease both;
+}
+.card:hover { transform:translateY(-3px); box-shadow:0 10px 40px rgba(0,0,0,.5); }
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+.c-header {
+  padding:11px 14px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.c-title  { display:flex; align-items:center; gap:7px; }
+.c-name   { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:800; letter-spacing:0.2px; }
+.c-meta   { display:flex; gap:8px; align-items:center; }
+.c-rank   { font-size:10px; font-weight:700; letter-spacing:0.3px; padding:2px 6px; border-radius:3px; }
+.c-cnt    { font-size:10px; }
+
+.c-body   { padding:12px 14px; display:flex; flex-direction:column; gap:10px; background:#0d1117; }
+
+.c-bigrow  { display:grid; grid-template-columns:auto 1fr 1fr 1fr; align-items:center; gap:8px; }
+.c-bigchg  { display:flex; align-items:baseline; gap:4px; }
+.c-arrow   { font-size:18px; font-weight:700; }
+.c-chgnum  { font-family:'Barlow Condensed',sans-serif; font-size:32px; font-weight:800; line-height:1; }
+.c-statbox  { text-align:center; background:#ffffff08; border-radius:4px; padding:6px 4px; }
+.c-statlbl  { display:block; font-size:8px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+.c-statval  { display:block; font-size:12px; font-weight:700; }
+
+.c-statrow  { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.c-statbox2 { text-align:center; background:#ffffff08; border-radius:4px; padding:6px 4px; }
+
+.c-divider { border:none; border-top:1px solid #ffffff10; }
+
+.c-movers    { display:flex; flex-direction:column; gap:4px; }
+.c-mover-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.c-mlbl      { font-size:9px; font-weight:700; letter-spacing:0.5px; width:42px; flex-shrink:0; }
+.mv          { font-size:10px; white-space:nowrap; }
+.mv b        { font-weight:700; }
+
+.c-breadth { display:flex; flex-direction:column; gap:5px; }
+.bb-row    { display:flex; align-items:center; gap:6px; }
+.bb-lbl    { font-size:9px; color:var(--muted); width:40px; flex-shrink:0; }
+.bb-track  { flex:1; height:5px; background:#ffffff12; border-radius:99px; overflow:hidden; }
+.bb-fill   { height:100%; border-radius:99px; }
+.bb-val    { font-size:9px; font-weight:700; width:36px; text-align:right; flex-shrink:0; }
+
+.footer { text-align:center; padding:16px; font-size:10px; color:var(--muted); border-top:1px solid var(--border); }
+
+/* rank legend */
+.legend { display:flex; gap:16px; align-items:center; padding:10px 28px; background:var(--bg); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--muted); }
+.legend-dot  { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="h-title">📊 Sector Performance Dashboard</div>
+    <div class="h-sub">NSE India &nbsp;·&nbsp; 22 Sectors &nbsp;·&nbsp; Data as of 19-03-2026</div>
+  </div>
+  <div class="h-right">
+    <span class="up">▲ 0 UP</span> &nbsp;|&nbsp; <span class="down">▼ 22 DOWN</span><br>
+    Best today: <span style="color:var(--green)">Utilities (-1.36%)</span><br>
+    Worst today: <span style="color:var(--red)">Automobile and Auto Components (-2.79%)</span>
+  </div>
+</div>
+
+<div class="sumbar">
+  <div class="sum-cell">
+    <div class="sum-lbl">Best 21D RS</div>
+    <div class="sum-val" style="color:var(--green)">Utilities</div>
+    <div class="sum-sub">-5.43%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Worst 21D RS</div>
+    <div class="sum-val" style="color:var(--red)">Construction Materials</div>
+    <div class="sum-sub">-13.72%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Best 5D</div>
+    <div class="sum-val" style="color:var(--green)">Power</div>
+    <div class="sum-sub">-2.33%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Worst 5D</div>
+    <div class="sum-val" style="color:var(--red)">Utilities</div>
+    <div class="sum-sub">-5.21%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Best Today</div>
+    <div class="sum-val" style="color:var(--green)">Utilities</div>
+    <div class="sum-sub">-1.36%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Worst Today</div>
+    <div class="sum-val" style="color:var(--red)">Automobile and Auto Components</div>
+    <div class="sum-sub">-2.79%</div>
+  </div>
+  <div class="sum-cell">
+    <div class="sum-lbl">Sectors Up / Down</div>
+    <div class="sum-val"><span style="color:var(--green)">0</span> / <span style="color:var(--red)">22</span></div>
+    <div class="sum-sub">22 total</div>
+  </div>
+</div>
+
+<div class="legend">
+  <span style="font-size:10px;color:var(--muted);margin-right:4px;">RANK LEGEND:</span>
+  <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div>Top 25% — Strong</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ffab00"></div>Next 25% — Improving</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff6d00"></div>Next 25% — Weakening</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d50000"></div>Bottom 25% — Weak</div>
+</div>
+
+<div class="controls">
+  <label>SORT BY</label>
+  <select id="sortBy" onchange="applyFilters()">
+    <option value="rank">Sector Rank</option>
+    <option value="chg">% Chg Today</option>
+    <option value="5d">5D Chg%</option>
+    <option value="rs">21D RS%</option>
+    <option value="stocksup">% Stocks Up</option>
+    <option value="rsi50">% Above RSI50</option>
+    <option value="ema21">% Above EMA21</option>
+    <option value="ema50">% Above EMA50</option>
+    <option value="ema200">% Above EMA200</option>
+    <option value="near52w">% Near 52W High</option>
+  </select>
+  <label>FILTER</label>
+  <select id="filterDir" onchange="applyFilters()">
+    <option value="all">All Sectors</option>
+    <option value="up">Up Today Only</option>
+    <option value="down">Down Today Only</option>
+  </select>
+  <input type="text" id="searchBox" placeholder="Search sector..." oninput="applyFilters()" style="width:160px">
+</div>
+
+<div class="grid" id="cardGrid">
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Utilities</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #1</span>
+      <span class="c-cnt" style="color:#1a000099">11 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.36%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-5.21%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-5.43%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">9.09%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">KOTYARK&nbsp;<b>+5.91%</b></span>
+        <span class="mv" style="color:#00e676">IONEXCHANG&nbsp;<b>+0.77%</b></span>
+        <span class="mv" style="color:#00e676">SHUBHSHREE&nbsp;<b>+0.28%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">RACE&nbsp;<b>-4.66%</b></span>
+        <span class="mv" style="color:#ff5252">JITFINFRA&nbsp;<b>-4.34%</b></span>
+        <span class="mv" style="color:#ff5252">INOXGREEN&nbsp;<b>-3.01%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:9.09%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">9.09%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:9.09%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">9.09%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:9.09%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">9.09%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Oil Gas & Consumable Fuels</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #2</span>
+      <span class="c-cnt" style="color:#1a000099">41 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.72%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-4.72%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-6.50%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.44%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ffab40">21.95%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">ATGL&nbsp;<b>+7.85%</b></span>
+        <span class="mv" style="color:#00e676">ONGC&nbsp;<b>+1.55%</b></span>
+        <span class="mv" style="color:#00e676">OIL&nbsp;<b>+1.40%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">PETRONET&nbsp;<b>-7.12%</b></span>
+        <span class="mv" style="color:#ff5252">HINDPETRO&nbsp;<b>-7.03%</b></span>
+        <span class="mv" style="color:#ff5252">SOUTHWEST&nbsp;<b>-7.03%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:19.51%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">19.51%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:21.95%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">21.95%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:14.63%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">14.63%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Power</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #3</span>
+      <span class="c-cnt" style="color:#1a000099">36 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.53%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.33%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-6.69%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.78%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ffab40">27.78%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">JPPOWER&nbsp;<b>+11.67%</b></span>
+        <span class="mv" style="color:#00e676">KARMAENG&nbsp;<b>+3.01%</b></span>
+        <span class="mv" style="color:#00e676">CLASSICEIL&nbsp;<b>+1.58%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">RELINFRA&nbsp;<b>-4.47%</b></span>
+        <span class="mv" style="color:#ff5252">BAJEL&nbsp;<b>-4.26%</b></span>
+        <span class="mv" style="color:#ff5252">RPOWER&nbsp;<b>-4.13%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:27.78%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">27.78%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:27.78%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">27.78%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:27.78%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">27.78%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Telecommunication</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #4</span>
+      <span class="c-cnt" style="color:#1a000099">36 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.15%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.02%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-7.10%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ffab40">25.00%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">ITI&nbsp;<b>+3.84%</b></span>
+        <span class="mv" style="color:#00e676">KAVDEFENCE&nbsp;<b>+1.42%</b></span>
+        <span class="mv" style="color:#00e676">TNTELE&nbsp;<b>+0.11%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">IDEA&nbsp;<b>-5.30%</b></span>
+        <span class="mv" style="color:#ff5252">VINDHYATEL&nbsp;<b>-5.10%</b></span>
+        <span class="mv" style="color:#ff5252">TTML&nbsp;<b>-4.75%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:27.78%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">27.78%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:16.67%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">16.67%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:22.22%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">22.22%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Healthcare</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #5</span>
+      <span class="c-cnt" style="color:#1a000099">178 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.06%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.52%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-7.28%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.25%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">16.29%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">AATMAJ&nbsp;<b>+10.03%</b></span>
+        <span class="mv" style="color:#00e676">VALIANTLAB&nbsp;<b>+8.56%</b></span>
+        <span class="mv" style="color:#00e676">BAFNAPH&nbsp;<b>+4.99%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">AAREYDRUGS&nbsp;<b>-6.96%</b></span>
+        <span class="mv" style="color:#ff5252">DCAL&nbsp;<b>-6.61%</b></span>
+        <span class="mv" style="color:#ff5252">ZOTA&nbsp;<b>-5.63%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:15.17%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">15.17%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:20.22%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">20.22%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:24.16%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">24.16%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Capital Goods</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #6</span>
+      <span class="c-cnt" style="color:#1a000099">414 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.13%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.15%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-8.05%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.42%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">19.81%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">MPEL&nbsp;<b>+16.20%</b></span>
+        <span class="mv" style="color:#00e676">DKEGL&nbsp;<b>+11.12%</b></span>
+        <span class="mv" style="color:#00e676">RVTH&nbsp;<b>+7.86%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">MUNISH&nbsp;<b>-10.78%</b></span>
+        <span class="mv" style="color:#ff5252">RAMASTEEL&nbsp;<b>-8.26%</b></span>
+        <span class="mv" style="color:#ff5252">AUROIMPEX&nbsp;<b>-8.19%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:21.98%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">21.98%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:18.84%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">18.84%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:27.05%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">27.05%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Forest Materials</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #7</span>
+      <span class="c-cnt" style="color:#1a000099">27 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.68%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.36%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-8.24%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">18.52%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">SHREYANIND&nbsp;<b>+10.12%</b></span>
+        <span class="mv" style="color:#00e676">AARADHYA&nbsp;<b>+6.19%</b></span>
+        <span class="mv" style="color:#00e676">GLOSTERLTD&nbsp;<b>+0.67%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">NIKITA&nbsp;<b>-5.47%</b></span>
+        <span class="mv" style="color:#ff5252">NRAIL&nbsp;<b>-5.01%</b></span>
+        <span class="mv" style="color:#ff5252">ORIENTPPR&nbsp;<b>-4.34%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:14.81%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">14.81%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:14.81%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">14.81%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:11.11%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">11.11%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Metals & Mining</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #8</span>
+      <span class="c-cnt" style="color:#1a000099">79 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.55%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.75%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-8.25%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.53%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">13.92%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">SURANI&nbsp;<b>+19.88%</b></span>
+        <span class="mv" style="color:#00e676">SHIVAUM&nbsp;<b>+8.20%</b></span>
+        <span class="mv" style="color:#00e676">NMSTEEL&nbsp;<b>+5.59%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">HINDZINC&nbsp;<b>-5.85%</b></span>
+        <span class="mv" style="color:#ff5252">ORISSAMINE&nbsp;<b>-5.51%</b></span>
+        <span class="mv" style="color:#ff5252">KIOCL&nbsp;<b>-5.41%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.66%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.66%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.66%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.66%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:34.18%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">34.18%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Fast Moving Consumer Goods</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #9</span>
+      <span class="c-cnt" style="color:#1a000099">187 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.86%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.18%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-8.85%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.53%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">16.04%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">USASEEDS&nbsp;<b>+4.99%</b></span>
+        <span class="mv" style="color:#00e676">MEDISTEP&nbsp;<b>+4.80%</b></span>
+        <span class="mv" style="color:#00e676">NIPPOBATRY&nbsp;<b>+3.15%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">VISHWAS&nbsp;<b>-10.97%</b></span>
+        <span class="mv" style="color:#ff5252">PRUDMOULI&nbsp;<b>-8.93%</b></span>
+        <span class="mv" style="color:#ff5252">SUNDARAM&nbsp;<b>-7.69%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:16.04%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">16.04%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:16.04%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">16.04%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:20.32%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">20.32%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Diversified</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #10</span>
+      <span class="c-cnt" style="color:#1a000099">18 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.75%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-4.32%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-9.13%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">5.56%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">16.67%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">3MINDIA&nbsp;<b>+0.02%</b></span>
+        <span class="mv" style="color:#00e676">ASCOM&nbsp;<b>+0.00%</b></span>
+        <span class="mv" style="color:#00e676">BINANIIND&nbsp;<b>+0.00%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">SPECTSTM&nbsp;<b>-7.83%</b></span>
+        <span class="mv" style="color:#ff5252">EMAPARTNER&nbsp;<b>-7.65%</b></span>
+        <span class="mv" style="color:#ff5252">RAJPUTANA&nbsp;<b>-6.12%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:11.11%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">11.11%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:16.67%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">16.67%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:11.11%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">11.11%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Financial Services</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #11</span>
+      <span class="c-cnt" style="color:#1a000099">246 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.51%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.44%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-9.54%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.41%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">9.35%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">USHAFIN&nbsp;<b>+18.52%</b></span>
+        <span class="mv" style="color:#00e676">FINKURVE&nbsp;<b>+15.51%</b></span>
+        <span class="mv" style="color:#00e676">MASKINVEST&nbsp;<b>+4.67%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">MASTERTR&nbsp;<b>-8.02%</b></span>
+        <span class="mv" style="color:#ff5252">UGROCAP&nbsp;<b>-7.34%</b></span>
+        <span class="mv" style="color:#ff5252">SHRIRAMFIN&nbsp;<b>-7.03%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:10.98%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">10.98%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:8.94%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">8.94%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:21.14%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">21.14%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Services</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #12</span>
+      <span class="c-cnt" style="color:#1a000099">202 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.02%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.51%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-10.61%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.99%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">17.33%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">SHYAMTEL&nbsp;<b>+7.46%</b></span>
+        <span class="mv" style="color:#00e676">SAIFL&nbsp;<b>+6.42%</b></span>
+        <span class="mv" style="color:#00e676">GML&nbsp;<b>+4.83%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">SHANTHALA&nbsp;<b>-16.98%</b></span>
+        <span class="mv" style="color:#ff5252">WHITEFORCE&nbsp;<b>-10.37%</b></span>
+        <span class="mv" style="color:#ff5252">DEVX&nbsp;<b>-7.79%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:17.33%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">17.33%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:14.36%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">14.36%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:23.27%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">23.27%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Consumer Durables</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #13</span>
+      <span class="c-cnt" style="color:#1a000099">145 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.06%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.55%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-11.04%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">12.41%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">BUTTERFLY&nbsp;<b>+12.90%</b></span>
+        <span class="mv" style="color:#00e676">MDL&nbsp;<b>+12.51%</b></span>
+        <span class="mv" style="color:#00e676">GANGABATH&nbsp;<b>+6.61%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">STYL&nbsp;<b>-8.70%</b></span>
+        <span class="mv" style="color:#ff5252">UTSSAV&nbsp;<b>-6.77%</b></span>
+        <span class="mv" style="color:#ff5252">MADHAV&nbsp;<b>-6.73%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.41%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.41%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:10.34%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">10.34%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:15.17%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">15.17%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Chemicals</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #14</span>
+      <span class="c-cnt" style="color:#1a000099">188 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.41%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.46%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-11.38%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">1.60%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">11.70%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">GUJALKALI&nbsp;<b>+12.59%</b></span>
+        <span class="mv" style="color:#00e676">VALIANTORG&nbsp;<b>+9.39%</b></span>
+        <span class="mv" style="color:#00e676">NACLIND&nbsp;<b>+4.46%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">DUCOL&nbsp;<b>-8.81%</b></span>
+        <span class="mv" style="color:#ff5252">UNILEX&nbsp;<b>-8.27%</b></span>
+        <span class="mv" style="color:#ff5252">PARAGON&nbsp;<b>-7.23%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.23%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.23%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.23%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.23%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:14.89%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">14.89%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Automobile and Auto Components</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #15</span>
+      <span class="c-cnt" style="color:#1a000099">137 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.79%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.31%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-11.76%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.19%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">8.76%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">TIRUPATIFL&nbsp;<b>+12.14%</b></span>
+        <span class="mv" style="color:#00e676">GOLDSTAR&nbsp;<b>+4.96%</b></span>
+        <span class="mv" style="color:#00e676">CARRARO&nbsp;<b>+3.10%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">PRITIKA&nbsp;<b>-9.11%</b></span>
+        <span class="mv" style="color:#ff5252">TCL&nbsp;<b>-6.74%</b></span>
+        <span class="mv" style="color:#ff5252">JBMA&nbsp;<b>-6.12%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:8.76%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">8.76%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:9.49%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">9.49%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:24.09%;background:#ffab40"></div></div>
+      <span class="bb-val" style="color:#ffab40">24.09%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Textiles</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #16</span>
+      <span class="c-cnt" style="color:#1a000099">145 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-1.98%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.60%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-12.11%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">2.76%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">15.86%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">LAL&nbsp;<b>+7.05%</b></span>
+        <span class="mv" style="color:#00e676">DAMODARIND&nbsp;<b>+5.83%</b></span>
+        <span class="mv" style="color:#00e676">EUROTEXIND&nbsp;<b>+4.46%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">SHRITECH&nbsp;<b>-8.30%</b></span>
+        <span class="mv" style="color:#ff5252">SUPERSPIN&nbsp;<b>-6.86%</b></span>
+        <span class="mv" style="color:#ff5252">MODTHREAD&nbsp;<b>-6.27%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:16.55%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">16.55%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:13.79%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">13.79%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:17.93%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">17.93%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Construction</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #17</span>
+      <span class="c-cnt" style="color:#1a000099">141 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.20%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-4.31%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-12.40%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.71%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">12.06%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">ACMESOLAR&nbsp;<b>+5.36%</b></span>
+        <span class="mv" style="color:#00e676">TECHERA&nbsp;<b>+4.99%</b></span>
+        <span class="mv" style="color:#00e676">GIRIRAJ&nbsp;<b>+4.91%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">GLOBALPET&nbsp;<b>-9.66%</b></span>
+        <span class="mv" style="color:#ff5252">KRIDHANINF&nbsp;<b>-6.50%</b></span>
+        <span class="mv" style="color:#ff5252">MBLINFRA&nbsp;<b>-6.09%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:11.35%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">11.35%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:8.51%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">8.51%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:15.6%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">15.60%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Consumer Services</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #18</span>
+      <span class="c-cnt" style="color:#1a000099">139 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.01%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.46%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-12.49%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.72%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">8.63%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">KHFM&nbsp;<b>+9.90%</b></span>
+        <span class="mv" style="color:#00e676">HAVISHA&nbsp;<b>+7.14%</b></span>
+        <span class="mv" style="color:#00e676">KORE&nbsp;<b>+5.00%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">SDREAMS&nbsp;<b>-9.69%</b></span>
+        <span class="mv" style="color:#ff5252">COFFEEDAY&nbsp;<b>-6.37%</b></span>
+        <span class="mv" style="color:#ff5252">URBANCO&nbsp;<b>-5.98%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:10.79%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">10.79%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:7.91%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">7.91%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.95%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.95%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Media Entertainment & Publication</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #19</span>
+      <span class="c-cnt" style="color:#1a000099">72 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.07%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-4.50%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-12.63%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">8.33%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">INSPIRE&nbsp;<b>+9.90%</b></span>
+        <span class="mv" style="color:#00e676">IDENTICAL&nbsp;<b>+4.44%</b></span>
+        <span class="mv" style="color:#00e676">RADAAN&nbsp;<b>+2.80%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">RADIOWALLA&nbsp;<b>-12.46%</b></span>
+        <span class="mv" style="color:#ff5252">RAJTV&nbsp;<b>-7.46%</b></span>
+        <span class="mv" style="color:#ff5252">BALAJITELE&nbsp;<b>-5.68%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:9.72%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">9.72%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:8.33%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">8.33%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:13.89%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">13.89%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Information Technology</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #20</span>
+      <span class="c-cnt" style="color:#1a000099">166 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.23%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.03%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-12.86%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.60%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">9.04%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">GVPTECH&nbsp;<b>+19.85%</b></span>
+        <span class="mv" style="color:#00e676">PARAMATRIX&nbsp;<b>+8.40%</b></span>
+        <span class="mv" style="color:#00e676">SILVERTUC&nbsp;<b>+4.74%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">TRIDHYA&nbsp;<b>-9.09%</b></span>
+        <span class="mv" style="color:#ff5252">CALSOFT&nbsp;<b>-8.44%</b></span>
+        <span class="mv" style="color:#ff5252">MGSL&nbsp;<b>-8.19%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.65%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.65%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:7.23%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">7.23%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:8.43%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">8.43%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Realty</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #21</span>
+      <span class="c-cnt" style="color:#1a000099">74 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.36%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-2.66%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-13.10%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">1.35%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">4.05%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">GOLDENTOBC&nbsp;<b>+1.88%</b></span>
+        <span class="mv" style="color:#00e676">AGIIL&nbsp;<b>+1.83%</b></span>
+        <span class="mv" style="color:#00e676">MAHLIFE&nbsp;<b>+1.05%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">MASON&nbsp;<b>-6.02%</b></span>
+        <span class="mv" style="color:#ff5252">ARTNIRMAN&nbsp;<b>-5.95%</b></span>
+        <span class="mv" style="color:#ff5252">RAYMONDREL&nbsp;<b>-5.94%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:4.05%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">4.05%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:2.7%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">2.70%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:5.41%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">5.41%</span>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="border-color:#c6282844">
+  <div class="c-header" style="background:#c62828">
+    <div class="c-title">
+      <span class="c-name" style="color:#1a0000">Construction Materials</span>
+    </div>
+    <div class="c-meta">
+      <span class="c-rank" style="color:#1a000088;background:#1a000022">RANK #22</span>
+      <span class="c-cnt" style="color:#1a000099">40 stocks</span>
+    </div>
+  </div>
+  <div class="c-body">
+
+    <div class="c-bigrow">
+      <div class="c-bigchg">
+        <span class="c-arrow" style="color:#ff5252">▼</span>
+        <span class="c-chgnum" style="color:#ff5252">-2.77%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">5D CHG</span>
+        <span class="c-statval" style="color:#ff5252">-3.68%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">21D RS</span>
+        <span class="c-statval" style="color:#ff5252">-13.72%</span>
+      </div>
+      <div class="c-statbox">
+        <span class="c-statlbl">% STOCKS UP</span>
+        <span class="c-statval" style="color:#ff5252">—%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-statrow">
+      <div class="c-statbox2">
+        <span class="c-statlbl">NEAR 52W HIGH</span>
+        <span class="c-statval" style="color:#ff5252">0.00%</span>
+      </div>
+      <div class="c-statbox2">
+        <span class="c-statlbl">RSI &gt; 50</span>
+        <span class="c-statval" style="color:#ff5252">2.50%</span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-movers">
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#00e676">▲ Best</span>
+        <span class="mv" style="color:#00e676">KESORAMIND&nbsp;<b>+4.57%</b></span>
+        <span class="mv" style="color:#00e676">STARCEMENT&nbsp;<b>+0.48%</b></span>
+        <span class="mv" style="color:#00e676">ARISINFRA&nbsp;<b>+0.00%</b></span>
+      </div>
+      <div class="c-mover-row">
+        <span class="c-mlbl" style="color:#ff5252">▼ Worst</span>
+        <span class="mv" style="color:#ff5252">NUVOCO&nbsp;<b>-6.39%</b></span>
+        <span class="mv" style="color:#ff5252">EUROPRATIK&nbsp;<b>-5.16%</b></span>
+        <span class="mv" style="color:#ff5252">SANGHIIND&nbsp;<b>-4.96%</b></span>
+      </div>
+    </div>
+
+    <hr class="c-divider">
+
+    <div class="c-breadth">
+      <div class="bb-row">
+      <span class="bb-lbl">EMA21</span>
+      <div class="bb-track"><div class="bb-fill" style="width:2.5%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">2.50%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA50</span>
+      <div class="bb-track"><div class="bb-fill" style="width:0%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">0.00%</span>
+    </div>
+      <div class="bb-row">
+      <span class="bb-lbl">EMA200</span>
+      <div class="bb-track"><div class="bb-fill" style="width:12.5%;background:#ff5252"></div></div>
+      <span class="bb-val" style="color:#ff5252">12.50%</span>
+    </div>
+    </div>
+
+  </div>
+</div></div>
+
+<div class="footer">Generated 20/3/2026, 12:16:26 am &nbsp;·&nbsp; AmiBroker AFL Export</div>
+
+<script>
+const RAW = [{"Ticker":"AWHCL","Date/Time":"19-03-2026","SECTOR":"Utilities","Sector Rank":"1","Total Stocks":"11","% StocksUpToday_Value":"27.27","% Chg Today":"-1.36","21D RS%":"-5.43","% Above EMA21":"9.09","% Above EMA50":"9.09","% Above EMA200":"9.09","% Near 52W High":"0","5D Chg%":"-5.21","% Above RSI50":"9.09","Best1":"KOTYARK","Best1 %":"5.91","Best2":"IONEXCHANG","Best2 %":"0.77","Best3":"SHUBHSHREE","Best3 %":"0.28","Worst1":"RACE","Worst1 %":"-4.66","Worst2":"JITFINFRA","Worst2 %":"-4.34","Worst3":"INOXGREEN","Worst3 %":"-3.01"},{"Ticker":"AAKASH","Date/Time":"19-03-2026","SECTOR":"Oil Gas & Consumable Fuels","Sector Rank":"2","Total Stocks":"41","% StocksUpToday_Value":"19.51","% Chg Today":"-1.72","21D RS%":"-6.5","% Above EMA21":"19.51","% Above EMA50":"21.95","% Above EMA200":"14.63","% Near 52W High":"2.44","5D Chg%":"-4.72","% Above RSI50":"21.95","Best1":"ATGL","Best1 %":"7.85","Best2":"ONGC","Best2 %":"1.55","Best3":"OIL","Best3 %":"1.4","Worst1":"PETRONET","Worst1 %":"-7.12","Worst2":"HINDPETRO","Worst2 %":"-7.03","Worst3":"SOUTHWEST","Worst3 %":"-7.03"},{"Ticker":"ADANIGREEN","Date/Time":"19-03-2026","SECTOR":"Power","Sector Rank":"3","Total Stocks":"36","% StocksUpToday_Value":"11.11","% Chg Today":"-1.53","21D RS%":"-6.69","% Above EMA21":"27.78","% Above EMA50":"27.78","% Above EMA200":"27.78","% Near 52W High":"2.78","5D Chg%":"-2.33","% Above RSI50":"27.78","Best1":"JPPOWER","Best1 %":"11.67","Best2":"KARMAENG","Best2 %":"3.01","Best3":"CLASSICEIL","Best3 %":"1.58","Worst1":"RELINFRA","Worst1 %":"-4.47","Worst2":"BAJEL","Worst2 %":"-4.26","Worst3":"RPOWER","Worst3 %":"-4.13"},{"Ticker":"AKSHOPTFBR","Date/Time":"19-03-2026","SECTOR":"Telecommunication","Sector Rank":"4","Total Stocks":"36","% StocksUpToday_Value":"11.11","% Chg Today":"-2.15","21D RS%":"-7.1","% Above EMA21":"27.78","% Above EMA50":"16.67","% Above EMA200":"22.22","% Near 52W High":"0","5D Chg%":"-3.02","% Above RSI50":"25","Best1":"ITI","Best1 %":"3.84","Best2":"KAVDEFENCE","Best2 %":"1.42","Best3":"TNTELE","Best3 %":"0.11","Worst1":"IDEA","Worst1 %":"-5.3","Worst2":"VINDHYATEL","Worst2 %":"-5.1","Worst3":"TTML","Worst3 %":"-4.75"},{"Ticker":"AAREYDRUGS","Date/Time":"19-03-2026","SECTOR":"Healthcare","Sector Rank":"5","Total Stocks":"178","% StocksUpToday_Value":"11.8","% Chg Today":"-2.06","21D RS%":"-7.28","% Above EMA21":"15.17","% Above EMA50":"20.22","% Above EMA200":"24.16","% Near 52W High":"2.25","5D Chg%":"-3.52","% Above RSI50":"16.29","Best1":"AATMAJ","Best1 %":"10.03","Best2":"VALIANTLAB","Best2 %":"8.56","Best3":"BAFNAPH","Best3 %":"4.99","Worst1":"AAREYDRUGS","Worst1 %":"-6.96","Worst2":"DCAL","Worst2 %":"-6.61","Worst3":"ZOTA","Worst3 %":"-5.63"},{"Ticker":"AARTECH","Date/Time":"19-03-2026","SECTOR":"Capital Goods","Sector Rank":"6","Total Stocks":"414","% StocksUpToday_Value":"11.84","% Chg Today":"-2.13","21D RS%":"-8.05","% Above EMA21":"21.98","% Above EMA50":"18.84","% Above EMA200":"27.05","% Near 52W High":"2.42","5D Chg%":"-3.15","% Above RSI50":"19.81","Best1":"MPEL","Best1 %":"16.2","Best2":"DKEGL","Best2 %":"11.12","Best3":"RVTH","Best3 %":"7.86","Worst1":"MUNISH","Worst1 %":"-10.78","Worst2":"RAMASTEEL","Worst2 %":"-8.26","Worst3":"AUROIMPEX","Worst3 %":"-8.19"},{"Ticker":"AARADHYA","Date/Time":"19-03-2026","SECTOR":"Forest Materials","Sector Rank":"7","Total Stocks":"27","% StocksUpToday_Value":"11.11","% Chg Today":"-1.68","21D RS%":"-8.24","% Above EMA21":"14.81","% Above EMA50":"14.81","% Above EMA200":"11.11","% Near 52W High":"0","5D Chg%":"-2.36","% Above RSI50":"18.52","Best1":"SHREYANIND","Best1 %":"10.12","Best2":"AARADHYA","Best2 %":"6.19","Best3":"GLOSTERLTD","Best3 %":"0.67","Worst1":"NIKITA","Worst1 %":"-5.47","Worst2":"NRAIL","Worst2 %":"-5.01","Worst3":"ORIENTPPR","Worst3 %":"-4.34"},{"Ticker":"20MICRONS","Date/Time":"19-03-2026","SECTOR":"Metals & Mining","Sector Rank":"8","Total Stocks":"79","% StocksUpToday_Value":"15.19","% Chg Today":"-1.55","21D RS%":"-8.25","% Above EMA21":"12.66","% Above EMA50":"12.66","% Above EMA200":"34.18","% Near 52W High":"2.53","5D Chg%":"-2.75","% Above RSI50":"13.92","Best1":"SURANI","Best1 %":"19.88","Best2":"SHIVAUM","Best2 %":"8.2","Best3":"NMSTEEL","Best3 %":"5.59","Worst1":"HINDZINC","Worst1 %":"-5.85","Worst2":"ORISSAMINE","Worst2 %":"-5.51","Worst3":"KIOCL","Worst3 %":"-5.41"},{"Ticker":"AAKAAR","Date/Time":"19-03-2026","SECTOR":"Fast Moving Consumer Goods","Sector Rank":"9","Total Stocks":"187","% StocksUpToday_Value":"19.79","% Chg Today":"-1.86","21D RS%":"-8.85","% Above EMA21":"16.04","% Above EMA50":"16.04","% Above EMA200":"20.32","% Near 52W High":"0.53","5D Chg%":"-3.18","% Above RSI50":"16.04","Best1":"USASEEDS","Best1 %":"4.99","Best2":"MEDISTEP","Best2 %":"4.8","Best3":"NIPPOBATRY","Best3 %":"3.15","Worst1":"VISHWAS","Worst1 %":"-10.97","Worst2":"PRUDMOULI","Worst2 %":"-8.93","Worst3":"SUNDARAM","Worst3 %":"-7.69"},{"Ticker":"3MINDIA","Date/Time":"19-03-2026","SECTOR":"Diversified","Sector Rank":"10","Total Stocks":"18","% StocksUpToday_Value":"5.56","% Chg Today":"-2.75","21D RS%":"-9.13","% Above EMA21":"11.11","% Above EMA50":"16.67","% Above EMA200":"11.11","% Near 52W High":"5.56","5D Chg%":"-4.32","% Above RSI50":"16.67","Best1":"3MINDIA","Best1 %":"0.02","Best2":"ASCOM","Best2 %":"0","Best3":"BINANIIND","Best3 %":"0","Worst1":"SPECTSTM","Worst1 %":"-7.83","Worst2":"EMAPARTNER","Worst2 %":"-7.65","Worst3":"RAJPUTANA","Worst3 %":"-6.12"},{"Ticker":"360ONE","Date/Time":"19-03-2026","SECTOR":"Financial Services","Sector Rank":"11","Total Stocks":"246","% StocksUpToday_Value":"6.1","% Chg Today":"-2.51","21D RS%":"-9.54","% Above EMA21":"10.98","% Above EMA50":"8.94","% Above EMA200":"21.14","% Near 52W High":"0.41","5D Chg%":"-2.44","% Above RSI50":"9.35","Best1":"USHAFIN","Best1 %":"18.52","Best2":"FINKURVE","Best2 %":"15.51","Best3":"MASKINVEST","Best3 %":"4.67","Worst1":"MASTERTR","Worst1 %":"-8.02","Worst2":"UGROCAP","Worst2 %":"-7.34","Worst3":"SHRIRAMFIN","Worst3 %":"-7.03"},{"Ticker":"AAATECH","Date/Time":"19-03-2026","SECTOR":"Services","Sector Rank":"12","Total Stocks":"202","% StocksUpToday_Value":"15.35","% Chg Today":"-2.02","21D RS%":"-10.61","% Above EMA21":"17.33","% Above EMA50":"14.36","% Above EMA200":"23.27","% Near 52W High":"0.99","5D Chg%":"-2.51","% Above RSI50":"17.33","Best1":"SHYAMTEL","Best1 %":"7.46","Best2":"SAIFL","Best2 %":"6.42","Best3":"GML","Best3 %":"4.83","Worst1":"SHANTHALA","Worst1 %":"-16.98","Worst2":"WHITEFORCE","Worst2 %":"-10.37","Worst3":"DEVX","Worst3 %":"-7.79"},{"Ticker":"ADL","Date/Time":"19-03-2026","SECTOR":"Consumer Durables","Sector Rank":"13","Total Stocks":"145","% StocksUpToday_Value":"13.79","% Chg Today":"-2.06","21D RS%":"-11.04","% Above EMA21":"12.41","% Above EMA50":"10.34","% Above EMA200":"15.17","% Near 52W High":"0","5D Chg%":"-3.55","% Above RSI50":"12.41","Best1":"BUTTERFLY","Best1 %":"12.9","Best2":"MDL","Best2 %":"12.51","Best3":"GANGABATH","Best3 %":"6.61","Worst1":"STYL","Worst1 %":"-8.7","Worst2":"UTSSAV","Worst2 %":"-6.77","Worst3":"MADHAV","Worst3 %":"-6.73"},{"Ticker":"AARTISURF","Date/Time":"19-03-2026","SECTOR":"Chemicals","Sector Rank":"14","Total Stocks":"188","% StocksUpToday_Value":"10.64","% Chg Today":"-2.41","21D RS%":"-11.38","% Above EMA21":"12.23","% Above EMA50":"12.23","% Above EMA200":"14.89","% Near 52W High":"1.6","5D Chg%":"-3.46","% Above RSI50":"11.7","Best1":"GUJALKALI","Best1 %":"12.59","Best2":"VALIANTORG","Best2 %":"9.39","Best3":"NACLIND","Best3 %":"4.46","Worst1":"DUCOL","Worst1 %":"-8.81","Worst2":"UNILEX","Worst2 %":"-8.27","Worst3":"PARAGON","Worst3 %":"-7.23"},{"Ticker":"ALICON","Date/Time":"19-03-2026","SECTOR":"Automobile and Auto Components","Sector Rank":"15","Total Stocks":"137","% StocksUpToday_Value":"8.76","% Chg Today":"-2.79","21D RS%":"-11.76","% Above EMA21":"8.76","% Above EMA50":"9.49","% Above EMA200":"24.09","% Near 52W High":"2.19","5D Chg%":"-3.31","% Above RSI50":"8.76","Best1":"TIRUPATIFL","Best1 %":"12.14","Best2":"GOLDSTAR","Best2 %":"4.96","Best3":"CARRARO","Best3 %":"3.1","Worst1":"PRITIKA","Worst1 %":"-9.11","Worst2":"TCL","Worst2 %":"-6.74","Worst3":"JBMA","Worst3 %":"-6.12"},{"Ticker":"ABCOTS","Date/Time":"19-03-2026","SECTOR":"Textiles","Sector Rank":"16","Total Stocks":"145","% StocksUpToday_Value":"12.41","% Chg Today":"-1.98","21D RS%":"-12.11","% Above EMA21":"16.55","% Above EMA50":"13.79","% Above EMA200":"17.93","% Near 52W High":"2.76","5D Chg%":"-3.6","% Above RSI50":"15.86","Best1":"LAL","Best1 %":"7.05","Best2":"DAMODARIND","Best2 %":"5.83","Best3":"EUROTEXIND","Best3 %":"4.46","Worst1":"SHRITECH","Worst1 %":"-8.3","Worst2":"SUPERSPIN","Worst2 %":"-6.86","Worst3":"MODTHREAD","Worst3 %":"-6.27"},{"Ticker":"A2ZINFRA","Date/Time":"19-03-2026","SECTOR":"Construction","Sector Rank":"17","Total Stocks":"141","% StocksUpToday_Value":"11.35","% Chg Today":"-2.2","21D RS%":"-12.4","% Above EMA21":"11.35","% Above EMA50":"8.51","% Above EMA200":"15.6","% Near 52W High":"0.71","5D Chg%":"-4.31","% Above RSI50":"12.06","Best1":"ACMESOLAR","Best1 %":"5.36","Best2":"TECHERA","Best2 %":"4.99","Best3":"GIRIRAJ","Best3 %":"4.91","Worst1":"GLOBALPET","Worst1 %":"-9.66","Worst2":"KRIDHANINF","Worst2 %":"-6.5","Worst3":"MBLINFRA","Worst3 %":"-6.09"},{"Ticker":"ABFRL","Date/Time":"19-03-2026","SECTOR":"Consumer Services","Sector Rank":"18","Total Stocks":"139","% StocksUpToday_Value":"14.39","% Chg Today":"-2.01","21D RS%":"-12.49","% Above EMA21":"10.79","% Above EMA50":"7.91","% Above EMA200":"12.95","% Near 52W High":"0.72","5D Chg%":"-3.46","% Above RSI50":"8.63","Best1":"KHFM","Best1 %":"9.9","Best2":"HAVISHA","Best2 %":"7.14","Best3":"KORE","Best3 %":"5","Worst1":"SDREAMS","Worst1 %":"-9.69","Worst2":"COFFEEDAY","Worst2 %":"-6.37","Worst3":"URBANCO","Worst3 %":"-5.98"},{"Ticker":"ANTGRAPHIC","Date/Time":"19-03-2026","SECTOR":"Media Entertainment & Publication","Sector Rank":"19","Total Stocks":"72","% StocksUpToday_Value":"13.89","% Chg Today":"-2.07","21D RS%":"-12.63","% Above EMA21":"9.72","% Above EMA50":"8.33","% Above EMA200":"13.89","% Near 52W High":"0","5D Chg%":"-4.5","% Above RSI50":"8.33","Best1":"INSPIRE","Best1 %":"9.9","Best2":"IDENTICAL","Best2 %":"4.44","Best3":"RADAAN","Best3 %":"2.8","Worst1":"RADIOWALLA","Worst1 %":"-12.46","Worst2":"RAJTV","Worst2 %":"-7.46","Worst3":"BALAJITELE","Worst3 %":"-5.68"},{"Ticker":"3IINFOLTD","Date/Time":"19-03-2026","SECTOR":"Information Technology","Sector Rank":"20","Total Stocks":"166","% StocksUpToday_Value":"12.05","% Chg Today":"-2.23","21D RS%":"-12.86","% Above EMA21":"12.65","% Above EMA50":"7.23","% Above EMA200":"8.43","% Near 52W High":"0.6","5D Chg%":"-3.03","% Above RSI50":"9.04","Best1":"GVPTECH","Best1 %":"19.85","Best2":"PARAMATRIX","Best2 %":"8.4","Best3":"SILVERTUC","Best3 %":"4.74","Worst1":"TRIDHYA","Worst1 %":"-9.09","Worst2":"CALSOFT","Worst2 %":"-8.44","Worst3":"MGSL","Worst3 %":"-8.19"},{"Ticker":"ABREL","Date/Time":"19-03-2026","SECTOR":"Realty","Sector Rank":"21","Total Stocks":"74","% StocksUpToday_Value":"8.11","% Chg Today":"-2.36","21D RS%":"-13.1","% Above EMA21":"4.05","% Above EMA50":"2.7","% Above EMA200":"5.41","% Near 52W High":"1.35","5D Chg%":"-2.66","% Above RSI50":"4.05","Best1":"GOLDENTOBC","Best1 %":"1.88","Best2":"AGIIL","Best2 %":"1.83","Best3":"MAHLIFE","Best3 %":"1.05","Worst1":"MASON","Worst1 %":"-6.02","Worst2":"ARTNIRMAN","Worst2 %":"-5.95","Worst3":"RAYMONDREL","Worst3 %":"-5.94"},{"Ticker":"ABINFRA","Date/Time":"19-03-2026","SECTOR":"Construction Materials","Sector Rank":"22","Total Stocks":"40","% StocksUpToday_Value":"5","% Chg Today":"-2.77","21D RS%":"-13.72","% Above EMA21":"2.5","% Above EMA50":"0","% Above EMA200":"12.5","% Near 52W High":"0","5D Chg%":"-3.68","% Above RSI50":"2.5","Best1":"KESORAMIND","Best1 %":"4.57","Best2":"STARCEMENT","Best2 %":"0.48","Best3":"ARISINFRA","Best3 %":"0","Worst1":"NUVOCO","Worst1 %":"-6.39","Worst2":"EUROPRATIK","Worst2 %":"-5.16","Worst3":"SANGHIIND","Worst3 %":"-4.96"}];
+
+function fmt(v,dec=2){const n=parseFloat(v);if(isNaN(n))return'—';return(n>=0?'+':'')+n.toFixed(dec)}
+function fmtP(v,dec=2){const n=parseFloat(v);if(isNaN(n))return'—';return n.toFixed(dec)}
+function bc(v){const n=+v;if(n>=60)return'#00e676';if(n>=40)return'#69f0ae';if(n>=20)return'#ffab40';return'#ff5252'}
+function cc(v){return+v>=0?'#00e676':'#ff5252'}
+function rhc(chg){return+chg>=0?'#00c853':'#c62828'}
+function rhtc(chg){return+chg>=0?'#003318':'#1a0000'}
+
+function buildCard(s, total) {
+  const chg=+s['% Chg Today'], rs=+s['21D RS%'], fd=+s['5D Chg%'], rank=+s['Sector Rank'];
+  const hbg=rhc(chg), htc=rhtc(chg);
+  const ac=cc(chg), arrow=chg>=0?'▲':'▼';
+
+  const mv=(t,p,g)=>{if(!t)return'';const c=g?'#00e676':'#ff5252';return `<span class="mv" style="color:${c}">${t}&nbsp;<b>${fmt(p)}%</b></span>`};
+  const bb=(label,val)=>{const n=parseFloat(val);const pct=isNaN(n)?0:Math.max(0,Math.min(100,n));const c=bc(pct);
+    return `<div class="bb-row"><span class="bb-lbl">${label}</span><div class="bb-track"><div class="bb-fill" style="width:${pct}%;background:${c}"></div></div><span class="bb-val" style="color:${c}">${fmtP(val)}%</span></div>`};
+
+  return `<div class="card" style="border-color:${hbg}44">
+    <div class="c-header" style="background:${hbg}">
+      <div class="c-title"><span class="c-name" style="color:${htc}">${s['SECTOR']}</span></div>
+      <div class="c-meta">
+        <span class="c-rank" style="color:${htc};background:${htc}22">RANK #${rank}</span>
+        <span class="c-cnt" style="color:${htc}cc">${s['Total Stocks']} stocks</span>
+      </div>
+    </div>
+    <div class="c-body">
+      <div class="c-bigrow">
+        <div class="c-bigchg"><span class="c-arrow" style="color:${ac}">${arrow}</span><span class="c-chgnum" style="color:${ac}">${fmt(chg)}%</span></div>
+        <div class="c-statbox"><span class="c-statlbl">5D CHG</span><span class="c-statval" style="color:${cc(fd)}">${fmt(fd)}%</span></div>
+        <div class="c-statbox"><span class="c-statlbl">21D RS</span><span class="c-statval" style="color:${cc(rs)}">${fmt(rs)}%</span></div>
+        <div class="c-statbox"><span class="c-statlbl">% STOCKS UP</span><span class="c-statval" style="color:${bc(s['StocksUpToday_Value'])}">${fmtP(s['StocksUpToday_Value'])}%</span></div>
+      </div>
+      <hr class="c-divider">
+      <div class="c-statrow">
+        <div class="c-statbox2"><span class="c-statlbl">NEAR 52W HIGH</span><span class="c-statval" style="color:${bc(s['% Near 52W High'])}">${fmtP(s['% Near 52W High'])}%</span></div>
+        <div class="c-statbox2"><span class="c-statlbl">RSI &gt; 50</span><span class="c-statval" style="color:${bc(s['% Above RSI50'])}">${fmtP(s['% Above RSI50'])}%</span></div>
+      </div>
+      <hr class="c-divider">
+      <div class="c-movers">
+        <div class="c-mover-row"><span class="c-mlbl" style="color:#00e676">▲ Best</span>${mv(s['Best1'],s['Best1 %'],true)}${mv(s['Best2'],s['Best2 %'],true)}${mv(s['Best3'],s['Best3 %'],true)}</div>
+        <div class="c-mover-row"><span class="c-mlbl" style="color:#ff5252">▼ Worst</span>${mv(s['Worst1'],s['Worst1 %'],false)}${mv(s['Worst2'],s['Worst2 %'],false)}${mv(s['Worst3'],s['Worst3 %'],false)}</div>
+      </div>
+      <hr class="c-divider">
+      <div class="c-breadth">
+        ${bb('EMA21',s['% Above EMA21'])}${bb('EMA50',s['% Above EMA50'])}${bb('EMA200',s['% Above EMA200'])}
+      </div>
+    </div>
+  </div>`;
+}
+
+function applyFilters() {
+  const sb=document.getElementById('sortBy').value;
+  const fd=document.getElementById('filterDir').value;
+  const sr=document.getElementById('searchBox').value.toLowerCase();
+  let data=[...RAW];
+  if(fd==='up')   data=data.filter(s=>+s['% Chg Today']>=0);
+  if(fd==='down') data=data.filter(s=>+s['% Chg Today']<0);
+  if(sr) data=data.filter(s=>s['SECTOR'].toLowerCase().includes(sr));
+  const sm={
+    rank:    s=>+s['Sector Rank'],
+    chg:     s=>-+s['% Chg Today'],
+    '5d':    s=>-+s['5D Chg%'],
+    rs:      s=>-+s['21D RS%'],
+    stocksup:s=>-+s['StocksUpToday_Value'],
+    rsi50:   s=>-+s['% Above RSI50'],
+    ema21:   s=>-+s['% Above EMA21'],
+    ema50:   s=>-+s['% Above EMA50'],
+    ema200:  s=>-+s['% Above EMA200'],
+    near52w: s=>-+s['% Near 52W High'],
+  };
+  data.sort((a,b)=>sm[sb](a)-sm[sb](b));
+  document.getElementById('cardGrid').innerHTML=data.map(s=>buildCard(s,RAW.length)).join('');
+}
+</script>
+</body>
+</html>
